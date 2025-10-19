@@ -17,7 +17,12 @@ end
 
 -- Get the Pawn Scale Names, including the non Localized names.
 function addon.getPawnScaleNames()
-    local scales = PawnGetAllScalesEx()
+    -- *** UPDATED LINE ***
+    -- Check if Pawn is loaded and has the function, then call it as a method
+    if not Pawn or not Pawn.GetAllScalesEx then return {} end
+    local scales = Pawn:GetAllScalesEx()
+    -- *** END UPDATE ***
+
     local scaleNames = {}
     for i = 1, #scales do
         scaleNames[i] = scales[i].LocalizedName
@@ -40,24 +45,25 @@ function addon.GetPawnCommonName()
     addon.pawnCommonName = addon.scaleName
 end
 
+-- *** ENTIRE FUNCTION UPDATED FOR MODERN PAWN API ***
 function addon:ScoreItem(itemLink)
-    if not addon.pawnCommonName then
+    -- Check if Pawn is loaded and has the modern GetItemScore function
+    if not addon.pawnCommonName or not Pawn or not Pawn.GetItemScore then
         return 0
     end
 
-    local pawnDat = PawnGetItemData(itemLink)
-    if not pawnDat then
-        return 0
-    end
+    -- Pawn:GetItemScore returns multiple values.
+    -- The second value 'value2' is the "upgraded" score, which is what
+    -- this addon was previously using (from PawnGetSingleValueFromItem).
+    local _, value2 = Pawn:GetItemScore(itemLink, addon.pawnCommonName)
 
-    local value1, value2 = PawnGetSingleValueFromItem(pawnDat, addon.pawnCommonName)
-
-    -- if value1 and value2 then
-    --     print(itemLink, value1, value2)
+    -- if value2 then
+    --     print(itemLink, value2 or 0)
     -- end
 
     return value2 or 0
 end
+-- *** END UPDATE ***
 
 -- Function to compare an item score to an equipped item
 function addon:CompareItemScores(newItem, threshold)
@@ -85,6 +91,16 @@ function addon:CompareItemScores(newItem, threshold)
 
     -- Calculate the percentage difference between scores
     local scoreDifference = newItem.score - equippedItem.score
+
+    -- Add a check to prevent division by zero if the equipped score is 0
+    if equippedItem.score == 0 then
+        if newItem.score > 0 then
+            return true, "New item has a score, equipped item does not"
+        else
+            return false, "Both items have zero score"
+        end
+    end
+
     local percentageDifference = (scoreDifference / equippedItem.score) * 100
 
     local threshold = threshold or 1
